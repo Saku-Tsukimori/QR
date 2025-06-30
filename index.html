@@ -23,8 +23,7 @@
     <div id="flag1" class="locked">フラグ1：🔒</div>
     <div id="flag2" class="locked">フラグ2：🔒</div>
     <div id="flag3" class="locked">フラグ3：🔒</div>
-    <div id="flag4" class="locked">フラグ4：🔒</div>
-    <div id="allFlags" class="locked">全フラグ解除：🔒</div>
+    <div id="allFlags" class="locked">全フラグ解除済：🔒</div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
@@ -40,16 +39,13 @@
       flag1: false,
       flag2: false,
       flag3: false,
-      flag4: false,
-      all: false,
     };
 
     const flagCodes = {
       "y5PjW6zf": "flag1",
       "Ry8gxiaL": "flag2",
       "hW8PZaQS": "flag3",
-      "Qm85gAEF": "flag4",
-      "Uh6H9uwd": "all",
+      "Uh6H9uwd": "cheat",  // 全解除チート
       "V3k6Fhfb": "reset"
     };
 
@@ -88,6 +84,8 @@
       const flagKey = flagCodes[data];
       if (flagKey === "reset") {
         resetFlags();
+      } else if (flagKey === "cheat") {
+        cheatUnlock();
       } else if (flagKey) {
         unlockFlag(flagKey);
       } else {
@@ -96,17 +94,6 @@
     }
 
     function unlockFlag(flagKey) {
-      if (flagKey === "all") {
-        if (Object.values(unlockedFlags).slice(0, 4).every(Boolean)) {
-          unlockedFlags.all = true;
-          document.getElementById("allFlags").textContent = "全フラグ解除：✅";
-          document.getElementById("allFlags").className = "unlocked";
-        } else {
-          output.textContent += "（先にフラグ1〜4を解除してください）";
-        }
-        return;
-      }
-
       if (!unlockedFlags[flagKey]) {
         unlockedFlags[flagKey] = true;
         const el = document.getElementById(flagKey);
@@ -118,25 +105,39 @@
       }
     }
 
+    function cheatUnlock() {
+      for (let key in unlockedFlags) {
+        unlockedFlags[key] = true;
+        const el = document.getElementById(key);
+        el.textContent = `フラグ${key.slice(-1)}：✅`;
+        el.className = "unlocked";
+      }
+      document.getElementById("allFlags").textContent = "全フラグ解除済：✅（チート）";
+      document.getElementById("allFlags").className = "unlocked";
+      output.textContent += "（チートで全フラグ解除）";
+    }
+
     function checkAllFlags() {
       if (
         unlockedFlags.flag1 &&
         unlockedFlags.flag2 &&
-        unlockedFlags.flag3 &&
-        unlockedFlags.flag4 &&
-        !unlockedFlags.all
+        unlockedFlags.flag3
       ) {
-        unlockFlag("all");
+        document.getElementById("allFlags").textContent = "全フラグ解除済：✅";
+        document.getElementById("allFlags").className = "unlocked";
       }
     }
 
     function resetFlags() {
       for (let key in unlockedFlags) unlockedFlags[key] = false;
-      ["flag1", "flag2", "flag3", "flag4", "allFlags"].forEach(id => {
+      ["flag1", "flag2", "flag3"].forEach(id => {
         const el = document.getElementById(id);
-        el.textContent = el.id === "allFlags" ? "全フラグ解除：🔒" : `フラグ${id.slice(-1)}：🔒`;
+        el.textContent = `フラグ${id.slice(-1)}：🔒`;
         el.className = "locked";
       });
+      const allEl = document.getElementById("allFlags");
+      allEl.textContent = "全フラグ解除済：🔒";
+      allEl.className = "locked";
       output.textContent = "🔄 フラグ状態をリセットしました";
     }
 
@@ -148,4 +149,3 @@
   </script>
 </body>
 </html>
-
