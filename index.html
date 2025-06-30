@@ -1,47 +1,71 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>QRコードスキャン</title>
+  <title>QRコード フラグアンロック</title>
   <style>
-    video, canvas {
-      display: block;
-      margin: 1em auto;
-      max-width: 100%;
-    }
-    #output {
-      text-align: center;
-      font-size: 1.2em;
-      color: green;
-    }
+    body { font-family: sans-serif; text-align: center; }
+    video, canvas { max-width: 90%; margin: 1em auto; display: block; }
+    #output, .flags { font-size: 1.1em; margin: 1em; }
+    .unlocked { color: green; font-weight: bold; }
+    .locked { color: gray; }
+    button { padding: 0.5em 1em; font-size: 1em; margin: 0.5em; }
   </style>
 </head>
 <body>
-  <h2 style="text-align:center;">📷 QRコードスキャン</h2>
-  <video id="video" width="300" height="200" autoplay muted></video>
+  <h2>📷 QRコードスキャン & フラグアンロック</h2>
+  <video id="video" autoplay muted></video>
   <canvas id="canvas" hidden></canvas>
-  <div id="output">読み取り中...</div>
+  <div id="output">読み取り待機中...</div>
+  <button id="restartBtn">🔄 再読み取り</button>
 
-  <!-- jsQRをCDNで読み込む -->
+  <div class="flags">
+    <div id="flag1" class="locked">フラグ1：🔒</div>
+    <div id="flag2" class="locked">フラグ2：🔒</div>
+    <div id="flag3" class="locked">フラグ3：🔒</div>
+    <div id="flag4" class="locked">フラグ4：🔒</div>
+    <div id="allFlags" class="locked">全フラグ解除：🔒</div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
   <script>
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
-    const output = document.getElementById('output');
     const ctx = canvas.getContext('2d');
+    const output = document.getElementById('output');
+    const restartBtn = document.getElementById('restartBtn');
+
+    let scanning = true;
+    const unlockedFlags = {
+      flag1: false,
+      flag2: false,
+      flag3: false,
+      flag4: false,
+      all: false,
+    };
+
+    const flagCodes = {
+      "y5PjW6zf": "flag1",
+      "Ry8gxiaL": "flag2",
+      "hW8PZaQS": "flag3",
+      "Qm85gAEF": "flag4",
+      "Uh6H9uwd": "all",
+      "V3k6Fhfb": "reset"
+    };
 
     // カメラ起動
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
       .then(stream => {
         video.srcObject = stream;
-        video.setAttribute("playsinline", true); // iOS対応
+        video.setAttribute("playsinline", true);
         requestAnimationFrame(tick);
       })
       .catch(err => {
-        output.textContent = "カメラにアクセスできません: " + err;
+        output.textContent = "カメラエラー: " + err;
       });
 
     function tick() {
+      if (!scanning) return;
       if (video.readyState === video.HAVE_ENOUGH_DATA) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -49,17 +73,79 @@
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
         if (code) {
-          output.textContent = "QRコード内容: " + code.data;
-          console.log("読み取ったデータ:", code.data);
-          // 必要であれば、ここでストップも可能:
-          // video.srcObject.getTracks().forEach(track => track.stop());
+          handleCode(code.data.trim());
+          scanning = false;
           return;
         } else {
-          output.textContent = "QRコードを探しています...";
+          output.textContent = "QRコードをスキャン中...";
         }
       }
       requestAnimationFrame(tick);
     }
+
+    function handleCode(data) {
+      output.textContent = "読み取ったコード: " + data;
+      const flagKey = flagCodes[data];
+      if (flagKey === "reset") {
+        resetFlags();
+      } else if (flagKey) {
+        unlockFlag(flagKey);
+      } else {
+        output.textContent += "（無効なコード）";
+      }
+    }
+
+    function unlockFlag(flagKey) {
+      if (flagKey === "all") {
+        if (Object.values(unlockedFlags).slice(0, 4).every(Boolean)) {
+          unlockedFlags.all = true;
+          document.getElementById("allFlags").textContent = "全フラグ解除：✅";
+          document.getElementById("allFlags").className = "unlocked";
+        } else {
+          output.textContent += "（先にフラグ1〜4を解除してください）";
+        }
+        return;
+      }
+
+      if (!unlockedFlags[flagKey]) {
+        unlockedFlags[flagKey] = true;
+        const el = document.getElementById(flagKey);
+        el.textContent = `${el.textContent.split("：")[0]}：✅`;
+        el.className = "unlocked";
+        checkAllFlags();
+      } else {
+        output.textContent += "（すでに解除済み）";
+      }
+    }
+
+    function checkAllFlags() {
+      if (
+        unlockedFlags.flag1 &&
+        unlockedFlags.flag2 &&
+        unlockedFlags.flag3 &&
+        unlockedFlags.flag4 &&
+        !unlockedFlags.all
+      ) {
+        unlockFlag("all");
+      }
+    }
+
+    function resetFlags() {
+      for (let key in unlockedFlags) unlockedFlags[key] = false;
+      ["flag1", "flag2", "flag3", "flag4", "allFlags"].forEach(id => {
+        const el = document.getElementById(id);
+        el.textContent = el.id === "allFlags" ? "全フラグ解除：🔒" : `フラグ${id.slice(-1)}：🔒`;
+        el.className = "locked";
+      });
+      output.textContent = "🔄 フラグ状態をリセットしました";
+    }
+
+    restartBtn.addEventListener("click", () => {
+      output.textContent = "再スキャン中...";
+      scanning = true;
+      requestAnimationFrame(tick);
+    });
   </script>
 </body>
 </html>
+
