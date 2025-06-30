@@ -2,150 +2,215 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>QRコード フラグアンロック</title>
+  <title>チェックポイント解除マップ</title>
   <style>
-    body { font-family: sans-serif; text-align: center; }
-    video, canvas { max-width: 90%; margin: 1em auto; display: block; }
-    #output, .flags { font-size: 1.1em; margin: 1em; }
-    .unlocked { color: green; font-weight: bold; }
-    .locked { color: gray; }
-    button { padding: 0.5em 1em; font-size: 1em; margin: 0.5em; }
+    body { font-family: sans-serif; text-align: center; margin: 0; }
+    .hidden { display: none; }
+
+    .map-container {
+      position: relative;
+      width: 1263px;
+      height: 954px;
+      margin: auto;
+      border: 1px solid #ccc;
+    }
+    .map-image {
+      width: 100%;
+      height: auto;
+    }
+    .cursor, .marker {
+      position: absolute;
+      width: 30px;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+    }
+    .cursor {
+      z-index: 20;
+    }
+    video {
+      width: 90%;
+      max-width: 600px;
+      margin-top: 1em;
+    }
   </style>
 </head>
 <body>
-  <h2>📷 QRコードスキャン & フラグアンロック</h2>
-  <video id="video" autoplay muted></video>
-  <canvas id="canvas" hidden></canvas>
-  <div id="output">読み取り待機中...</div>
-  <button id="restartBtn">🔄 再読み取り</button>
 
-  <div class="flags">
-    <div id="flag1" class="locked">フラグ1：🔒</div>
-    <div id="flag2" class="locked">フラグ2：🔒</div>
-    <div id="flag3" class="locked">フラグ3：🔒</div>
-    <div id="allFlags" class="locked">全フラグ解除済：🔒</div>
+  <!-- 地図画面 -->
+  <div id="mapPage">
+    <h2>📍 現在地とチェックポイント</h2>
+    <div class="map-container">
+      <img src="your_updated_map.png" class="map-image" alt="地図">
+      <img id="cursor" src="cursor.png" class="cursor" alt="現在地カーソル">
+      <img id="cp0" class="marker" src="blue_marker.png">
+      <img id="cp1" class="marker" src="blue_marker.png">
+      <img id="cp2" class="marker" src="blue_marker.png">
+    </div>
+    <br>
+    <button onclick="switchToQR()">📷 コードを読み取る</button>
   </div>
 
+  <!-- QRコード読み取り画面 -->
+  <div id="qrPage" class="hidden">
+    <h2>📷 QRコードを読み取ってください</h2>
+    <video id="video" autoplay muted playsinline></video>
+    <div id="qrOutput">スキャン中...</div>
+    <br>
+    <button onclick="stopQR()">⬅ 地図に戻る</button>
+  </div>
+
+  <!-- jsQRライブラリ -->
   <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
   <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const output = document.getElementById('output');
-    const restartBtn = document.getElementById('restartBtn');
+    const mapWidth = 1263, mapHeight = 954;
+    const latNorth = 35.658734, latSouth = 35.655442;
+    const lonWest = 139.539832, lonEast = 139.545234;
 
-    let scanning = true;
-    const unlockedFlags = {
-      flag1: false,
-      flag2: false,
-      flag3: false,
-    };
+    const cursor = document.getElementById("cursor");
+    const cpIds = ["cp0", "cp1", "cp2"];
+    const cpFlags = [false, false, false];
 
-    const flagCodes = {
-      "y5PjW6zf": "flag1",
-      "Ry8gxiaL": "flag2",
-      "hW8PZaQS": "flag3",
-      "Uh6H9uwd": "cheat",  // 全解除チート
+    const checkpoints = [
+      { id: "cp0", lat: 35.657318, lon: 139.543567 },
+      { id: "cp1", lat: 35.657241, lon: 139.542211 },
+      { id: "cp2", lat: 35.656817, lon: 139.540553 }
+    ];
+
+    // 地図座標に変換
+    function convertToMapCoords(lat, lon) {
+      const x = ((lon - lonWest) / (lonEast - lonWest)) * mapWidth;
+      const y = ((latNorth - lat) / (latNorth - latSouth)) * mapHeight;
+      return { x, y };
+    }
+
+    // チェックポイントマーカー表示
+    checkpoints.forEach((cp, i) => {
+      const { x, y } = convertToMapCoords(cp.lat, cp.lon);
+      const marker = document.getElementById(cp.id);
+      marker.style.left = `${x}px`;
+      marker.style.top = `${y}px`;
+    });
+
+    // 現在地表示
+    if ("geolocation" in navigator) {
+      navigator.geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const { x, y } = convertToMapCoords(latitude, longitude);
+          if (x >= 0 && x <= mapWidth && y >= 0 && y <= mapHeight) {
+            cursor.style.left = `${x}px`;
+            cursor.style.top = `${y}px`;
+            cursor.style.display = "block";
+          } else {
+            cursor.style.display = "none";
+          }
+        },
+        (err) => console.error("位置情報エラー:", err.message),
+        {
+          enableHighAccuracy: true,
+          maximumAge: 1000,
+          timeout: 10000
+        }
+      );
+    }
+
+    // ページ切り替え
+    function switchToQR() {
+      document.getElementById("mapPage").classList.add("hidden");
+      document.getElementById("qrPage").classList.remove("hidden");
+      startQR();
+    }
+
+    function stopQR() {
+      stopCamera();
+      document.getElementById("qrPage").classList.add("hidden");
+      document.getElementById("mapPage").classList.remove("hidden");
+    }
+
+    // QRコード処理
+    const qrOutput = document.getElementById("qrOutput");
+    const video = document.getElementById("video");
+    let qrStream = null;
+
+    const flagMap = {
+      "y5PjW6zf": 0,
+      "Ry8gxiaL": 1,
+      "hW8PZaQS": 2,
+      "Uh6H9uwd": "cheat",
       "V3k6Fhfb": "reset"
     };
 
-    // カメラ起動
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-      .then(stream => {
-        video.srcObject = stream;
-        video.setAttribute("playsinline", true);
-        requestAnimationFrame(tick);
-      })
-      .catch(err => {
-        output.textContent = "カメラエラー: " + err;
-      });
+    function startQR() {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        .then(stream => {
+          qrStream = stream;
+          video.srcObject = stream;
+          requestAnimationFrame(scanFrame);
+        }).catch(err => {
+          qrOutput.textContent = "カメラ起動エラー: " + err;
+        });
+    }
 
-    function tick() {
-      if (!scanning) return;
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-        if (code) {
-          handleCode(code.data.trim());
-          scanning = false;
-          return;
+    function stopCamera() {
+      if (qrStream) {
+        qrStream.getTracks().forEach(track => track.stop());
+        qrStream = null;
+      }
+    }
+
+    function scanFrame() {
+      if (!video.videoWidth) {
+        requestAnimationFrame(scanFrame);
+        return;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+      if (code) {
+        handleQR(code.data.trim());
+      } else {
+        qrOutput.textContent = "スキャン中...";
+        requestAnimationFrame(scanFrame);
+      }
+    }
+
+    function handleQR(data) {
+      qrOutput.textContent = "読み取ったコード: " + data;
+      const flag = flagMap[data];
+
+      if (flag === "cheat") {
+        cpFlags.forEach((_, i) => {
+          cpFlags[i] = true;
+          document.getElementById(cpIds[i]).src = "orange_marker.png";
+        });
+        qrOutput.textContent += "（全解除）";
+      } else if (flag === "reset") {
+        cpFlags.forEach((_, i) => {
+          cpFlags[i] = false;
+          document.getElementById(cpIds[i]).src = "blue_marker.png";
+        });
+        qrOutput.textContent = "チェックポイントをリセットしました";
+      } else if (typeof flag === "number") {
+        if (!cpFlags[flag]) {
+          cpFlags[flag] = true;
+          document.getElementById(cpIds[flag]).src = "orange_marker.png";
+          qrOutput.textContent += `（フラグ${flag + 1}解除）`;
         } else {
-          output.textContent = "QRコードをスキャン中...";
+          qrOutput.textContent += "（すでに解除済み）";
         }
-      }
-      requestAnimationFrame(tick);
-    }
-
-    function handleCode(data) {
-      output.textContent = "読み取ったコード: " + data;
-      const flagKey = flagCodes[data];
-      if (flagKey === "reset") {
-        resetFlags();
-      } else if (flagKey === "cheat") {
-        cheatUnlock();
-      } else if (flagKey) {
-        unlockFlag(flagKey);
       } else {
-        output.textContent += "（無効なコード）";
+        qrOutput.textContent += "（無効なコード）";
       }
-    }
 
-    function unlockFlag(flagKey) {
-      if (!unlockedFlags[flagKey]) {
-        unlockedFlags[flagKey] = true;
-        const el = document.getElementById(flagKey);
-        el.textContent = `${el.textContent.split("：")[0]}：✅`;
-        el.className = "unlocked";
-        checkAllFlags();
-      } else {
-        output.textContent += "（すでに解除済み）";
-      }
+      // 数秒後に地図へ戻る
+      setTimeout(stopQR, 1500);
     }
-
-    function cheatUnlock() {
-      for (let key in unlockedFlags) {
-        unlockedFlags[key] = true;
-        const el = document.getElementById(key);
-        el.textContent = `フラグ${key.slice(-1)}：✅`;
-        el.className = "unlocked";
-      }
-      document.getElementById("allFlags").textContent = "全フラグ解除済：✅（チート）";
-      document.getElementById("allFlags").className = "unlocked";
-      output.textContent += "（チートで全フラグ解除）";
-    }
-
-    function checkAllFlags() {
-      if (
-        unlockedFlags.flag1 &&
-        unlockedFlags.flag2 &&
-        unlockedFlags.flag3
-      ) {
-        document.getElementById("allFlags").textContent = "全フラグ解除済：✅";
-        document.getElementById("allFlags").className = "unlocked";
-      }
-    }
-
-    function resetFlags() {
-      for (let key in unlockedFlags) unlockedFlags[key] = false;
-      ["flag1", "flag2", "flag3"].forEach(id => {
-        const el = document.getElementById(id);
-        el.textContent = `フラグ${id.slice(-1)}：🔒`;
-        el.className = "locked";
-      });
-      const allEl = document.getElementById("allFlags");
-      allEl.textContent = "全フラグ解除済：🔒";
-      allEl.className = "locked";
-      output.textContent = "🔄 フラグ状態をリセットしました";
-    }
-
-    restartBtn.addEventListener("click", () => {
-      output.textContent = "再スキャン中...";
-      scanning = true;
-      requestAnimationFrame(tick);
-    });
   </script>
 </body>
 </html>
