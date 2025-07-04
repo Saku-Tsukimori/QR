@@ -8,6 +8,7 @@
     .hidden { display: none; }
 
     .map-container {
+      position: relative;
       display: grid;
       grid-template-columns: repeat(3, 352px);
       grid-template-rows: repeat(3, 438px);
@@ -18,6 +19,13 @@
       width: 352px;
       height: 438px;
       display: block;
+    }
+    .cursor {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      transform: translate(-50%, -50%);
+      z-index: 100;
     }
     video {
       width: 90%;
@@ -31,9 +39,11 @@
   <!-- 地図画面 -->
   <div id="mapPage">
     <h2>🧩 分割画像とQRチェックポイント</h2>
-    <div class="map-container">
+    <div class="map-container" id="mapContainer">
+      <!-- 現在地カーソル -->
+      <img id="cursor" class="cursor" src="cursor.png" alt="現在地">
+
       <!-- 9枚のグレースケール画像を最初に表示 -->
-      <!-- id="img0" ~ id="img8" で制御 -->
       <div class="map-cell"><img id="img0" src="gray_0.png"></div>
       <div class="map-cell"><img id="img1" src="gray_1.png"></div>
       <div class="map-cell"><img id="img2" src="gray_2.png"></div>
@@ -159,7 +169,38 @@
 
       setTimeout(stopQR, 1500);
     }
+
+    // 現在地カーソル表示
+    const cursor = document.getElementById("cursor");
+    const mapW = 1056; // 352*3
+    const mapH = 1314; // 438*3
+
+    function updateCursor(lat, lon) {
+      let x = -17491.3 * lat + 12539.2 * lon + 12641.7;
+      let y = 149063.4 * lat - 105517.8 * lon - 107249.2;
+
+      // 範囲制限
+      x = Math.max(0, Math.min(mapW, x));
+      y = Math.max(0, Math.min(mapH, y));
+
+      cursor.style.left = `${x}px`;
+      cursor.style.top = `${y}px`;
+    }
+
+    if (navigator.geolocation) {
+      navigator.geolocation.watchPosition(
+        pos => {
+          const { latitude, longitude } = pos.coords;
+          updateCursor(latitude, longitude);
+        },
+        err => console.warn("位置情報取得失敗", err),
+        {
+          enableHighAccuracy: true,
+          maximumAge: 1000,
+          timeout: 10000
+        }
+      );
+    }
   </script>
 </body>
 </html>
-
