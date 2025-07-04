@@ -8,24 +8,16 @@
     .hidden { display: none; }
 
     .map-container {
-      position: relative;
-      width: 1263px;
-      height: 954px;
+      display: grid;
+      grid-template-columns: repeat(3, 352px);
+      grid-template-rows: repeat(3, 438px);
+      width: fit-content;
       margin: auto;
-      border: 1px solid #ccc;
     }
-    .map-image {
-      width: 100%;
-      height: auto;
-    }
-    .cursor, .marker {
-      position: absolute;
-      width: 30px;
-      transform: translate(-50%, -50%);
-      z-index: 10;
-    }
-    .cursor {
-      z-index: 20;
+    .map-cell img {
+      width: 352px;
+      height: 438px;
+      display: block;
     }
     video {
       width: 90%;
@@ -38,16 +30,22 @@
 
   <!-- 地図画面 -->
   <div id="mapPage">
-    <h2>📍 現在地とチェックポイント</h2>
+    <h2>🧩 分割画像とQRチェックポイント</h2>
     <div class="map-container">
-      <img src="your_updated_map.png" class="map-image" alt="地図">
-      <img id="cursor" src="cursor.png" class="cursor" alt="現在地カーソル">
-      <img id="cp0" class="marker" src="blue_marker.png">
-      <img id="cp1" class="marker" src="blue_marker.png">
-      <img id="cp2" class="marker" src="blue_marker.png">
+      <!-- 9枚のグレースケール画像を最初に表示 -->
+      <!-- id="img0" ~ id="img8" で制御 -->
+      <div class="map-cell"><img id="img0" src="gray_0.png"></div>
+      <div class="map-cell"><img id="img1" src="gray_1.png"></div>
+      <div class="map-cell"><img id="img2" src="gray_2.png"></div>
+      <div class="map-cell"><img id="img3" src="gray_3.png"></div>
+      <div class="map-cell"><img id="img4" src="gray_4.png"></div>
+      <div class="map-cell"><img id="img5" src="gray_5.png"></div>
+      <div class="map-cell"><img id="img6" src="gray_6.png"></div>
+      <div class="map-cell"><img id="img7" src="gray_7.png"></div>
+      <div class="map-cell"><img id="img8" src="gray_8.png"></div>
     </div>
     <br>
-    <button onclick="switchToQR()">📷 コードを読み取る</button>
+    <button onclick="switchToQR()">📷 QRコードを読み取る</button>
   </div>
 
   <!-- QRコード読み取り画面 -->
@@ -62,59 +60,21 @@
   <!-- jsQRライブラリ -->
   <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
   <script>
-    const mapWidth = 1263, mapHeight = 954;
-    const latNorth = 35.658734, latSouth = 35.655442;
-    const lonWest = 139.539832, lonEast = 139.545234;
+    const qrOutput = document.getElementById("qrOutput");
+    const video = document.getElementById("video");
+    let qrStream = null;
 
-    const cursor = document.getElementById("cursor");
-    const cpIds = ["cp0", "cp1", "cp2"];
-    const cpFlags = [false, false, false];
+    // 初期状態のフラグ配列
+    const flags = Array(9).fill(false);
 
-    const checkpoints = [
-      { id: "cp0", lat: 35.657318, lon: 139.543567 },
-      { id: "cp1", lat: 35.657241, lon: 139.542211 },
-      { id: "cp2", lat: 35.656817, lon: 139.540553 }
-    ];
+    const flagMap = {
+      "001": 0, "002": 1, "003": 2,
+      "004": 3, "005": 4, "006": 5,
+      "007": 6, "008": 7, "009": 8,
+      "010": "cheat",
+      "011": "reset"
+    };
 
-    // 地図座標に変換
-    function convertToMapCoords(lat, lon) {
-      const x = ((lon - lonWest) / (lonEast - lonWest)) * mapWidth;
-      const y = ((latNorth - lat) / (latNorth - latSouth)) * mapHeight;
-      return { x, y };
-    }
-
-    // チェックポイントマーカー表示
-    checkpoints.forEach((cp, i) => {
-      const { x, y } = convertToMapCoords(cp.lat, cp.lon);
-      const marker = document.getElementById(cp.id);
-      marker.style.left = `${x}px`;
-      marker.style.top = `${y}px`;
-    });
-
-    // 現在地表示
-    if ("geolocation" in navigator) {
-      navigator.geolocation.watchPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          const { x, y } = convertToMapCoords(latitude, longitude);
-          if (x >= 0 && x <= mapWidth && y >= 0 && y <= mapHeight) {
-            cursor.style.left = `${x}px`;
-            cursor.style.top = `${y}px`;
-            cursor.style.display = "block";
-          } else {
-            cursor.style.display = "none";
-          }
-        },
-        (err) => console.error("位置情報エラー:", err.message),
-        {
-          enableHighAccuracy: true,
-          maximumAge: 1000,
-          timeout: 10000
-        }
-      );
-    }
-
-    // ページ切り替え
     function switchToQR() {
       document.getElementById("mapPage").classList.add("hidden");
       document.getElementById("qrPage").classList.remove("hidden");
@@ -126,19 +86,6 @@
       document.getElementById("qrPage").classList.add("hidden");
       document.getElementById("mapPage").classList.remove("hidden");
     }
-
-    // QRコード処理
-    const qrOutput = document.getElementById("qrOutput");
-    const video = document.getElementById("video");
-    let qrStream = null;
-
-    const flagMap = {
-      "y5PjW6zf": 0,
-      "Ry8gxiaL": 1,
-      "hW8PZaQS": 2,
-      "Uh6H9uwd": "cheat",
-      "V3k6Fhfb": "reset"
-    };
 
     function startQR() {
       navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
@@ -185,22 +132,24 @@
       const flag = flagMap[data];
 
       if (flag === "cheat") {
-        cpFlags.forEach((_, i) => {
-          cpFlags[i] = true;
-          document.getElementById(cpIds[i]).src = "orange_marker.png";
-        });
+        for (let i = 0; i < 9; i++) {
+          flags[i] = true;
+          document.getElementById(`img${i}`).src = `color_${i}.png`;
+        }
         qrOutput.textContent += "（全解除）";
+
       } else if (flag === "reset") {
-        cpFlags.forEach((_, i) => {
-          cpFlags[i] = false;
-          document.getElementById(cpIds[i]).src = "blue_marker.png";
-        });
+        for (let i = 0; i < 9; i++) {
+          flags[i] = false;
+          document.getElementById(`img${i}`).src = `gray_${i}.png`;
+        }
         qrOutput.textContent = "チェックポイントをリセットしました";
+
       } else if (typeof flag === "number") {
-        if (!cpFlags[flag]) {
-          cpFlags[flag] = true;
-          document.getElementById(cpIds[flag]).src = "orange_marker.png";
-          qrOutput.textContent += `（フラグ${flag + 1}解除）`;
+        if (!flags[flag]) {
+          flags[flag] = true;
+          document.getElementById(`img${flag}`).src = `color_${flag}.png`;
+          qrOutput.textContent += `（${flag + 1}番マス解除）`;
         } else {
           qrOutput.textContent += "（すでに解除済み）";
         }
@@ -208,9 +157,9 @@
         qrOutput.textContent += "（無効なコード）";
       }
 
-      // 数秒後に地図へ戻る
       setTimeout(stopQR, 1500);
     }
   </script>
 </body>
 </html>
+
